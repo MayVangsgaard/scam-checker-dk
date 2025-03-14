@@ -6,16 +6,40 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: "http://localhost:3000" })); // Allow frontend requests
+
+// ✅ Allow CORS for both local and deployed frontend
+const allowedOrigins = [
+  "http://localhost:3000", // Local frontend
+  "https://your-frontend.vercel.app", // Replace with actual deployed frontend URL
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+  })
+);
+
 app.use(express.json());
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-app.post("/check-scam", async (req, res) => {
+// ✅ Health check route for testing backend deployment
+app.get("/api/status", (req, res) => {
+  res.json({ status: "ok", message: "Serveren kører fint på Render." });
+});
+
+// ✅ Scam detection endpoint
+app.post("/api/check-scam", async (req, res) => {
   const { text, type } = req.body;
 
   if (!text) {
-    return res.status(400).json({ error: "Text input is required" });
+    return res.status(400).json({ error: "Indsæt venligst en besked eller e-mail." });
   }
 
   try {
@@ -24,26 +48,29 @@ app.post("/check-scam", async (req, res) => {
       {
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "Du er en AI, der vurderer svindelbeskeder på dansk." },
-          { 
-            role: "user", 
-            content: `Analyser denne ${type === "message" ? "SMS" : "email"} for tegn på svindel. 
+          {
+            role: "system",
+            content: "Du er en høflig og professionel AI, der vurderer svindelbeskeder på dansk.",
+          },
+          {
+            role: "user",
+            content: `Analyser denne ${type === "message" ? "SMS" : "e-mail"} for tegn på svindel. 
 
             **Formatkrav:**
             - Brug overskrifter uden asterisks.
-            - Ingen unødvendige symboler eller dashes før sætninger.
+            - Ingen unødvendige symboler eller streger før sætninger.
             - Skriv klart og præcist med tydelige afsnit.
-            - Hvis en virksomhed nævnes, forsøg at finde deres officielle kundeservice-kontakt (telefonnummer, email eller hjemmeside).
+            - Hvis en virksomhed nævnes, forsøg at finde deres officielle kundeservice-kontakt (telefonnummer, e-mail eller hjemmeside).
             - Hvis ingen officiel kontakt kan findes, skriv: "Ingen verificeret kundeservice fundet."
 
             **Afsluttende anbefaling:**  
-            - Hvis beskeden er svindel, anbefal at modtageren blot **sletter den** og ikke svarer.  
-            - Hvis der er **mulighed** for, at beskeden er legitim, tilføj denne sætning:  
-              *"Hvis du vil være helt sikker på, at denne service fortsat fungerer, så kan du overveje at kontakte dem direkte på følgende måde:"*  
+            - Hvis beskeden er svindel, anbefal venligst modtageren at **slette den** og ikke svare.  
+            - Hvis der er **mulighed** for, at beskeden er legitim, tilføj denne høflige sætning:  
+              *"Hvis du vil være helt sikker på, at servicen der er omtalt fortsat fungerer, kan du overveje at kontakte organisationen direkte på følgende måde:"*  
               (og inkluder kontaktinfo hvis tilgængelig).
 
             **Besked til analyse:**  
-            ${text}`
+            ${text}`,
           },
         ],
         temperature: 0.2,
@@ -55,10 +82,11 @@ app.post("/check-scam", async (req, res) => {
 
     res.json({ result: response.data.choices[0].message.content });
   } catch (error) {
-    console.error("Error calling OpenAI API:", error);
-    res.status(500).json({ error: "Fejl ved analyse af besked." });
+    console.error("❌ Error calling OpenAI API:", error.response?.data || error.message);
+    res.status(500).json({ error: "Der opstod en fejl ved analysen. Prøv venligst igen senere." });
   }
 });
 
+// ✅ Ensure Render-compatible PORT handling
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Serveren kører på http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ Serveren kører på port ${PORT}`));
