@@ -50,25 +50,23 @@ app.post("/api/check-scam", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "Du er en høflig og professionel AI, der vurderer svindelbeskeder på dansk.",
+            content: "Du er en høflig og professionel AI, der vurderer svindelbeskeder på dansk. Beslut også en risikovurdering: 'high', 'medium' eller 'low'.",
           },
           {
             role: "user",
-            content: `Analyser denne ${type === "message" ? "SMS" : "e-mail"} for tegn på svindel. 
+            content: `Analyser denne ${type === "message" ? "SMS" : "e-mail"} for tegn på svindel og giv en risikovurdering. 
 
             **Formatkrav:**
             - Brug overskrifter uden asterisks.
             - Ingen unødvendige symboler eller streger før sætninger.
             - Skriv klart og præcist med tydelige afsnit.
-            - Hvis en virksomhed nævnes, forsøg at finde deres officielle kundeservice-kontakt (telefonnummer, e-mail eller hjemmeside).
-            - Hvis ingen officiel kontakt kan findes, skriv: "Ingen verificeret kundeservice fundet."
-
-            **Afsluttende anbefaling:**  
-            - Hvis beskeden er svindel, anbefal venligst modtageren at **slette den** og ikke svare.  
-            - Hvis der er **mulighed** for, at beskeden er legitim, tilføj denne høflige sætning:  
-              *"Hvis du vil være helt sikker på, at servicen der er omtalt fortsat fungerer, kan du overveje at kontakte organisationen direkte på følgende måde:"*  
-              (og inkluder kontaktinfo hvis tilgængelig).
-
+            - Angiv en af følgende risikovurderinger i dit svar: 'high', 'medium' eller 'low'.
+            **Afsluttende anbefaling:**
+            - Hvis beskeden er svindel, anbefal venligst modtageren at **slette den** og ikke svare.
+            - Hvis der er **mulighed** for, at beskeden er legitim, tilføj denne høflige sætning:
+            *"Hvis du vil være helt sikker på, at servicen der er omtalt fortsat fungerer, kan du overveje først at spørge en god bekendt om at vurdere teksten, derefter eventuelt kontakte organisationen direkte."*
+              (forsøg at finde deres officielle kundeservice-kontakt (telefonnummer, e-mail eller link til kundeservice på website).
+              og inkluder kontaktinfo (f.eks. mailadresse på kundeservice) eller link til kundeservice hvis du kan finde troværdig information om dette online. Hvis ingen officiel kontakt kan findes, skriv: "Ingen verificeret kundeservice fundet.").
             **Besked til analyse:**  
             ${text}`,
           },
@@ -80,7 +78,14 @@ app.post("/api/check-scam", async (req, res) => {
       }
     );
 
-    res.json({ result: response.data.choices[0].message.content });
+    const aiResponse = response.data.choices[0].message.content;
+    
+    // Extract risk level from AI response
+    let riskLevel = "medium"; // Default
+    if (aiResponse.includes("high")) riskLevel = "high";
+    else if (aiResponse.includes("low")) riskLevel = "low";
+
+    res.json({ result: aiResponse, riskLevel });
   } catch (error) {
     console.error("❌ Error calling OpenAI API:", error.response?.data || error.message);
     res.status(500).json({ error: "Der opstod en fejl ved analysen. Prøv venligst igen senere." });
